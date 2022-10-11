@@ -1,0 +1,249 @@
+---
+title: "PSTAT 126 - Lab 3"
+subtitle: "Fall 2022"
+output: 
+  pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+_Note: If you are having trouble with Rstudio or Rmarkdown, come to office hours or message us on Nectir._
+
+## Dataset for today: Baseball!
+
+### Installing Data Package
+
+A package named `Lahman` contains baseball data. To install the package, running the following command in the RStudio console:
+```
+install.packages('Lahman')
+``` 
+See the description of the data package by running,
+```
+help("Lahman-package", package="Lahman")
+```
+Following lists the datasets:
+```
+help(package="Lahman")
+```
+
+Load the data package
+```{r, message=FALSE}
+library(tidyverse)
+library(Lahman) # Package with baseball (MLB) statistics
+str(Batting)
+```
+
+## Model 1
+  * Can we predict the number of Runs by the number of At Bats?
+
+```{r}
+df1 <- Batting %>%
+filter(yearID == "2017" & # stats from 2017
+        lgID == "NL" & # only from the NL
+        AB > 100) # only At Bats more than 100.
+
+dim(df1)
+```
+
+**Remark:** to read information about the data set, type `?Batting` into the Console. Here we are restricting the data set -- we are only looking at statistics from players in 2017 that played in the the National League (NL) and went up to bat at least 100 times. You can see this restricts us to 215 observations.
+
+```{r}
+p <- df1 %>% ggplot()+
+  geom_point(aes(x=AB, y=R))+
+  labs(x = "At Bats", y = "Runs")
+p
+```
+
+Looks pretty linear! Lets use the `lm` function to fit the model
+$$
+\text{Runs}_i = \beta_0 + \beta_1\cdot \text{At Bats}_i + \epsilon_i.
+$$
+
+```{r}
+Runs <- df1$R
+At_Bats <- df1$AB
+
+model_Runs <- lm(Runs ~ At_Bats, data = df1)
+summary(model_Runs)
+```
+
+We can add our model function to our plot from before
+```{r}
+p + geom_abline(aes(intercept = model_Runs$coefficients[1],
+                    slope = model_Runs$coefficients[2]),
+                color = "blue") +
+  ggtitle("Plot with fitted values")
+```
+
+## Simple Linear Regression Model Assumptions
+  1) The mean response is a linear function of $x_i$. **L**inearity
+  2) Errors have **E**qual variance. Var$(Y_i) = \sigma^2$ for every $i$ 
+  3) Errors are **N**ormally distributed
+  4) Errors are **I**ndependent
+  
+  * Can use the acronym **L.I.N.E.** to help you remember.
+
+### How do we test that these assumptions hold?
+  
+  * Linearity = Residuals vs. Fitted plot 
+  * Constant Variance = Scale - Location 
+  * Normality = QQ plot
+  * Independence = Complicated. Requires knowledge of study design or data collection in order to establish the validity of this assumption. No general test.
+  
+For the first 3 assumptions, using the base R `plot` function on an `lm` object generates 3 plots which we can respectively use to assess if the assumptions hold.
+
+**Linearity**
+
+```{r, fig.align='center'}
+plot(model_Runs, which = 1)
+```
+
+We are looking for there to be no obvious pattern around the horizontal line. The residuals are more or less evenly distributed above and below the line.
+
+Our assumption is that "the mean response is a linear function of $x_i$"
+
+$$
+E[Y_i] = E[\beta_0 + \beta_1x_i + \epsilon_i] = \beta_0 + \beta_1x_i + \underbrace{E[\epsilon_i]}_{=\ 0}
+$$
+Since the residuals $e_i$ are an approximation to our errors $\epsilon_i$, if the residuals are evenly spread around the horizontal line, this gives us evidence that the errors have zero mean.
+
+This overall really amounts to the assumption that our model specification is correct.
+
+**Constant Variance**
+
+Many times, we can analyze whether our residuals have constant variance also by looking at the Residuals vs. Fitted Values plot above. Scanning left to right, if the points seem the band of points seems to have a constant width, that's what we want.
+
+However, a Scale-Location plot just makes it easier to assess homoscedacity issues.
+
+```{r}
+plot(model_Runs, which = 3)
+```
+
+The red line gives a measure of the average magnitude of the residuals around that fitted value. If the residuals have constant variance, we would expect the red line to be flat.
+
+The Scale-Location is particularly easier to analyze than the Residual plot when the data is more sparse or when the points are rather unevenly distributed along the $x$-axis.
+
+In our example, the red line has an upward trend, indicating the variance of the residuals increases as the fitted values increase.
+
+A common trick to attempt to vanquish heteroscedacity is to transform the response variable using a transform such as a log or square root.
+
+**Normality**
+
+This assumption is arguably the least important. The normality of the errors (and thus the residuals) is used to deduce the distributions of our OLS estimators, and with this knowledge, we can justify our confidence intervals and significance tests for our estimates.
+
+Furthermore, non-normality may only be of concern with small sample sizes, otherwise, the Central Limit Theorem will ensure normality of our residuals.
+
+```{r}
+plot(model_Runs, which = 2)
+```
+
+With a QQ-plot, we are looking for all the points to line on the line to say that residuals are normally distributed.
+
+## Model 2 
+  
+  * Can we predict Strike outs by Home runs?
+  
+```{r}
+df2 <- Batting %>%
+filter(yearID == "2017" & # stats from 2017
+        lgID == "NL" & # only from the NL
+        AB > 200 & # Players who have more than 200 At Bats
+        HR < 45) # Players who have less than 45 home runs
+dim(df2)
+
+df2 %>% ggplot(aes(x = HR, y = SO))+
+  geom_point()+
+  geom_smooth(method = "lm", formula = "y~x", se = F)+
+  labs(x="Home Runs", y="Strike Outs")
+```
+
+```{r}
+Strike_outs <- df2$SO 
+Home_Runs <- df2$HR
+
+model_SO_HR <- lm(Strike_outs ~ Home_Runs, data = df2)
+
+for(j in 1:3){ 
+  plot(model_SO_HR, which = j) 
+}
+```
+
+
+## ANOVA 
+
+  * ANOVA - Analysis of Variance, is another tool we can use to make inferences about our model.
+  
+  * The linear regression assumptions must hold to justify our inferences about our model, so let's use the `anova()` function on the previous model which satisfied the three assumptions.
+  
+```{r}
+anova(model_SO_HR)
+```
+  
+The $p$-value basically tells us that `Home_Runs` is a significant predictor of `Strike_outs`. More specifically, it's telling us that our model $Y_i = \beta_0 + \beta_1 x_i + \epsilon_i$ explains more of the variance in the response compared to the "null model" (intercept only), $Y_i = \beta_0 + \epsilon_i$.
+
+```{r, echo=TRUE}
+df2 %>% ggplot(aes(x = Home_Runs, y = Strike_outs)) +
+  geom_point()+
+  geom_smooth(aes(color = "Linear"),
+              method = "lm",
+              formula = "y~x",
+              se = F)+
+  geom_smooth(aes(color = "Constant"),
+              method = "lm",
+              formula = "y~1",
+              se = F)+
+  scale_color_manual(name = "Model",
+                     values = c("Linear" = "blue",
+                                "Constant" = "red")
+                    )
+```
+
+Including Home Runs as a predictor gives us a "better fit" than not including it.
+
+#### Questions:
+
+Let's answer the following questions about the `anova()` output:
+
+  1) What is the $\hat\sigma^2$ value?
+  2) What is the $R^2$ value?
+  3) What is our $n$, the number of observations?
+  4) What is the value for the $t$ statistic for the coefficient $\hat\beta_1$
+  5) What % of variability in strike outs (response variable) is unexplained by a linear relationship with
+home runs (predictor variable)?
+
+#### Answers
+  
+  1) $\hat\sigma^2 = \text{MSE} = `r anova(model_SO_HR)[2,3]`$
+```{r}
+anova(model_SO_HR)[2,3]
+summary(model_SO_HR)$sigma^2
+```
+
+  2) $R^2 = 1 - \frac{RSS}{TSS} = \frac{SS_{reg}}{TSS} = `r  anova(model_SO_HR)[1,2] /(anova(model_SO_HR)[1,2] + anova(model_SO_HR)[2,2])`$
+```{r}
+ anova(model_SO_HR)[1,2] /
+(anova(model_SO_HR)[1,2] + anova(model_SO_HR)[2,2])
+summary(model_SO_HR)$r.squared
+```
+
+  3) The total degrees of freedom (Df) is $n-1$, so $n = Df_{HR} + Df_{resid} + 1 = `r anova(model_SO_HR)[1,1] + anova(model_SO_HR)[2,1] + 1`.$
+```{r}
+anova(model_SO_HR)[1,1] + anova(model_SO_HR)[2,1] + 1
+```
+
+  4) The $F$-test gives the same result as a pooled two-sample $t$-test where $F$-stat = $t$-stat$^2$, so $t = \sqrt{F} = `r sqrt(anova(model_SO_HR)[1,4])`$.
+```{r}
+sqrt(anova(model_SO_HR)[1,4])
+summary(model_SO_HR)$coef[2,3]
+```
+
+  5) % unexplained variability $= 100(1-R^2) = 100\frac{RSS}{TSS} = `r (anova(model_SO_HR)[2,2] / (anova(model_SO_HR)[1,2] + anova(model_SO_HR)[2,2])) * 100`%$
+```{r}
+(anova(model_SO_HR)[2,2] / (anova(model_SO_HR)[1,2] + anova(model_SO_HR)[2,2])) * 100
+```
+
+```{r}
+summary(model_SO_HR)
+```
