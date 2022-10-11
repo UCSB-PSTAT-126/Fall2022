@@ -247,3 +247,57 @@ summary(model_SO_HR)$coef[2,3]
 ```{r}
 summary(model_SO_HR)
 ```
+
+## Transformations
+
+  * See Chapter 7 of Faraway book
+
+*Can we predict At bats from GIDP (Grounded into double plays)?*
+
+```{r}
+df3 <- Batting %>%
+        filter(yearID == "2017" & # stats from 2017
+        lgID == "NL" & # only from the NL
+        G > 70 & # Only players who have played more than 70 games
+        SB != 0) # Only players that have at least stolen 1 base.
+dim(df3)
+model_3 <- lm(AB ~ GIDP, data = df3)
+summary(model_3)
+for(j in 1:3){ 
+  plot(model_3, which = j) 
+}
+```
+
+  * Possible right skew of residuals (based on two ends of QQ-plot curving up)
+  * Non-constant variance
+  
+We can try transforming our data to fix these issues. We can either transform the response or the predictor, but let's use the `invTranPlot` function from the `car` package to find an appropriate transformation of our predictor.
+
+```{r, message=FALSE}
+library(car)
+invTranPlot(AB ~ GIDP, data = df3, lambda = c(-1, 0, 1), optimal = F)
+```
+
+What this function just did was fit 3 models and plotted the results of all 3 of them on the same plot.
+
+The function transformed our predictor $x$ (`GIDP` in this case) as follows
+
+$$
+v = 
+\begin{cases}
+  \displaystyle\frac{x^\lambda - 1}{\lambda},&\lambda\neq 0\\
+  \log(x), &\lambda = 0
+\end{cases}.
+$$
+
+Then a simple linear regression is fit with this new variable $v$ instead. We are (somewhat arbitrarily) choosing to fit these models with $\lambda = -1, 0,$ and 1. Notice that $\lambda = 1$ corresponds to no transformation at all.
+
+From the plot above, it looks like $\lambda = 0$ gives the best fit, so we could try moving forward by log transforming `GIDP`. It would be important to re-check our diagnostic plots with this new transformation.
+
+```{r}
+for(j in 1:3){ 
+  plot(lm(AB ~ log(GIDP), data = df3), which = j) 
+}
+```
+
+Not perfect, but better than before.
